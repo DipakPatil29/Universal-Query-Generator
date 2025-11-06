@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Data Query Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Inconsolata:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #10b981; /* Emerald 500 */
+            --header-start: #065f46; /* Deep Emerald */
+            --header-end: #059669; /* Emerald 600 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            transition: background-color 0.3s;
+        }
+        .container-card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            border-radius: 0.5rem;
+        }
+        .code-block {
+            font-family: 'Inconsolata', monospace;
+            background-color: #1f2937; /* Darker background for code */
+            color: #4ade80; /* Light green text for readability */
+        }
+        .header-bg {
+            background-image: linear-gradient(to right, var(--header-start), var(--header-end));
+        }
+        /* Style for the dynamic input fields */
+        .data-input {
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            width: 100%;
+            transition: border-color 0.2s;
+            background-color: #ffffff;
+        }
+        .data-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 1px var(--primary-color);
+        }
+        /* Ensures data cells have a minimum readable width */
+        .data-input-cell {
+            min-width: 150px;
+        }
+        /* Drag & Drop Styles */
+        #dropZone.drag-over {
+            border-color: var(--primary-color);
+            background-color: #ecfdf5; /* Emerald 50 */
+        }
+        /* Enhanced drop zone size and centering */
+        #dropZone {
+            min-height: 180px; 
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        /* Table container styling for both horizontal and vertical scrolling */
+        #tableContainer {
+            max-height: 650px; /* Increased height for more rows visibility */
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        /* Ensure table header stays put */
+        #dataTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="header-bg text-white p-6 rounded-t-lg mb-8 shadow-lg">
+            <h1 class="text-3xl font-bold">Universal Data Query Generator</h1>
+            <p class="mt-1 text-emerald-100">Your single source for generating valid data queries for SQL and NoSQL databases.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Configuration Panel -->
+            <div class="lg:col-span-1 space-y-8">
+                <!-- Schema Definition -->
+                <div class="container-card bg-white p-6 rounded-lg">
+                    <h2 class="text-xl font-semibold mb-3 text-gray-800">1. Define Target & Schema</h2>
+
+                    <label for="dbType" class="block text-sm font-medium text-gray-700 mb-1">Target Database Type:</label>
+                    <select id="dbType" onchange="updateSchema()" class="data-input mb-4 appearance-none pr-8 bg-white bg-no-repeat bg-right-2" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%236b7280%22%3e%3cpath fill-rule=%22evenodd%22 d=%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22 clip-rule=%22evenodd%22 /%3e%3c/svg%3e'); background-size: 1.5rem;">
+                        <option value="sql">SQL (MySQL/Oracle/PostgreSQL)</option>
+                        <option value="mongodb">MongoDB (JSON Documents)</option>
+                        <option value="aql">AQL (ArangoDB)</option>
+                    </select>
+
+                    <label for="queryType" class="block text-sm font-medium text-gray-700 mb-1">Query Operation:</label>
+                    <select id="queryType" onchange="updateSchema()" class="data-input mb-4 appearance-none pr-8 bg-white bg-no-repeat bg-right-2" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%236b7280%22%3e%3cpath fill-rule=%22evenodd%22 d=%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22 clip-rule=%22evenodd%22 /%3e%3c/svg%3e'); background-size: 1.5rem;">
+                        <option value="insert">INSERT (Create New Data)</option>
+                        <option value="update">UPDATE (Modify Existing Data)</option>
+                    </select>
+
+                    <div id="pkFieldContainer" class="mb-4 hidden">
+                        <label for="pkFieldName" class="block text-sm font-medium text-red-700 mb-1">Primary Key (PK) Column Name:</label>
+                        <input type="text" id="pkFieldName" placeholder="e.g., id (The column used in WHERE clause)" class="data-input border-red-400" />
+                        <p class="text-xs text-red-500 mt-1">Required for UPDATE. Must match a schema field name below.</p>
+                    </div>
+
+                    <label for="collectionName" class="block text-sm font-medium text-gray-700 mb-1" id="nameLabel">Table/Collection Name:</label>
+                    <input type="text" id="collectionName" value="products" placeholder="e.g., employees, orders" class="data-input mb-4" />
+                    
+                    <label for="schemaInput" class="block text-sm font-medium text-gray-700 mb-1">Column/Field Names (comma separated):</label>
+                    <input type="text" id="schemaInput" placeholder="id, name, price, is_available" class="data-input" />
+                    <button onclick="updateSchema()" class="mt-3 w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700 active:bg-emerald-800 transition duration-150 font-semibold shadow-md hover:shadow-lg">
+                        Update Table Schema
+                    </button>
+                    <p class="text-xs text-gray-500 mt-2">Note: Duplicates are automatically removed for valid schema definition.</p>
+                </div>
+
+                <!-- Query Generation & Controls -->
+                <div class="container-card bg-white p-6 rounded-lg">
+                    <h2 class="text-xl font-semibold mb-3 text-gray-800">3. Generate Query</h2>
+                    <button onclick="generateQuery()" class="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition duration-150 font-bold text-lg shadow-xl">
+                        GENERATE QUERY
+                    </button>
+                </div>
+
+                <!-- Quick Tips (Dynamic) -->
+                <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p class="font-semibold text-yellow-800 mb-1" id="tipHeader">Quick Tip (SQL Formatting):</p>
+                    <ul class="text-sm text-yellow-700 list-disc list-inside space-y-0.5" id="tipList">
+                        <li>**Strings:** Wrapped in single quotes ('). Single quotes inside strings must be escaped ('').</li>
+                        <li>**Numbers/Booleans/NULL:** Inserted directly (unquoted). Enter TRUE, FALSE, or NULL.</li>
+                        <li>**JSON/Arrays:** Treated as quoted strings.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Data Entry Table and Import -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Data Entry Table (2A) -->
+                <div class="container-card bg-white p-6 rounded-lg" id="tableContainer">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">2A. Data Entry Table</h2>
+                    <div class="mb-4 flex justify-between items-center">
+                        <p id="tableStatus" class="text-sm text-gray-600"></p>
+                        <button onclick="addRow()" class="bg-blue-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-600 active:bg-blue-700 transition duration-150 font-medium shadow-sm">
+                            + Add Data Row
+                        </button>
+                    </div>
+                    
+                    <table class="min-w-full divide-y divide-gray-200" id="dataTable">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr id="tableHeader">
+                                <!-- Headers generated by JS -->
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200" id="tableBody">
+                            <!-- Data rows generated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="border-t border-gray-300">
+
+                <!-- CSV/File Import Card (2B) -->
+                <div class="container-card bg-white p-6 rounded-lg">
+                    <h2 class="text-xl font-semibold mb-3 text-gray-800">2B. Import Data (CSV/TXT File)</h2>
+                    
+                    <!-- File Input/Drag & Drop Zone -->
+                    <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg text-center transition duration-200">
+                        <input type="file" id="fileInput" class="hidden" accept=".csv, text/csv, text/plain">
+                        
+                        <!-- SVG Cloud Icon - Class list updated here -->
+                        <svg class="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 014 4v2a4 4 0 01-4 4h-2m-4-2l-4-4m0 0l-4 4m4-4v10"></path></svg>
+                        
+                        <p class="text-sm text-gray-600 font-medium mb-1">Drag & Drop your CSV file here</p>
+                        <p class="text-xs text-gray-400 mb-2">or</p>
+                        <label for="fileInput" class="bg-emerald-100 text-emerald-700 text-xs px-3 py-1.5 rounded-full hover:bg-emerald-200 cursor-pointer transition shadow-sm">
+                            Browse File (.csv, .txt)
+                        </label>
+                    </div>
+
+                    <p class="text-xs text-gray-500 mt-2">Tip: Your file's **first row** will automatically define the column names (schema) above.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Output Section -->
+        <div class="mt-8">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800" id="outputHeader">4. Generated SQL Output</h2>
+            
+            <div id="outputContainer" class="hidden">
+                <div class="bg-white p-6 rounded-lg container-card space-y-4">
+                    <!-- Query -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-800 mb-2 border-b pb-1" id="queryTitle">SQL INSERT Statement</h3>
+                        <div class="flex justify-end items-center mb-2">
+                            <button onclick="copyToClipboard('queryOutput')" class="bg-green-500 text-white text-xs px-3 py-1 rounded-full hover:bg-green-600 active:bg-green-700 transition duration-150">Copy Query</button>
+                        </div>
+                        <pre id="queryOutput" class="code-block p-4 rounded-lg overflow-x-auto text-sm max-h-96"></pre>
+                    </div>
+                </div>
+            </div>
+            <div id="noOutputMessage" class="p-4 bg-gray-100 rounded-lg text-gray-500 text-center border-2 border-dashed border-gray-300">
+                Click "GENERATE QUERY" once you have defined your schema and entered some data.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for file handling and schema
+        let fieldNames = [];
+        let rowCount = 0;
+        let csvHeaders = [];
+        let csvData = [];
+        const schemaInput = document.getElementById('schemaInput');
+        const tableNameInput = document.getElementById('collectionName');
+        const dbTypeSelect = document.getElementById('dbType');
+        const queryTypeSelect = document.getElementById('queryType');
+        const pkFieldNameInput = document.getElementById('pkFieldName');
+        const pkFieldContainer = document.getElementById('pkFieldContainer');
+        const tableHeader = document.getElementById('tableHeader');
+        const tableBody = document.getElementById('tableBody');
+        const tableStatus = document.getElementById('tableStatus');
+        const queryOutput = document.getElementById('queryOutput');
+        const outputContainer = document.getElementById('outputContainer');
+        const noOutputMessage = document.getElementById('noOutputMessage');
+        const queryTitle = document.getElementById('queryTitle');
+        const outputHeader = document.getElementById('outputHeader');
+        const tipHeader = document.getElementById('tipHeader');
+        const tipList = document.getElementById('tipList');
+        const nameLabel = document.getElementById('nameLabel');
+
+
+        function showTemporaryMessage(text, type) {
+            const colorMap = {
+                'green': 'bg-green-500',
+                'red': 'bg-red-500',
+                'yellow': 'bg-yellow-500'
+            };
+            
+            const message = document.createElement('div');
+            message.textContent = text;
+            message.className = `fixed bottom-4 right-4 ${colorMap[type]} text-white p-3 rounded-lg shadow-xl z-50`;
+            document.body.appendChild(message);
+            setTimeout(() => document.body.removeChild(message), 4000);
+        }
+
+        function parseValue(value) {
+            if (value === null || value === undefined) return { type: 'string', value: '', raw: '' };
+            
+            const trimmedValue = value.trim();
+            const lowerValue = trimmedValue.toLowerCase();
+
+            if (lowerValue === 'null') return { type: 'null', value: 'NULL', raw: trimmedValue };
+            if (lowerValue === 'true' || lowerValue === 'false') {
+                 return { type: 'boolean', value: lowerValue === 'true', raw: trimmedValue };
+            }
+
+            if (!isNaN(trimmedValue) && trimmedValue !== '') {
+                const num = Number(trimmedValue);
+                if (isFinite(num)) {
+                    return { type: 'number', value: num, raw: trimmedValue };
+                }
+            }
+            
+            if ((trimmedValue.startsWith('{') && trimmedValue.endsWith('}')) || (trimmedValue.startsWith('[') && trimmedValue.endsWith(']'))) {
+                try {
+                    const json = JSON.parse(trimmedValue);
+                    return { type: 'json', value: json, raw: trimmedValue };
+                } catch (e) {
+                    // Fall through to default string
+                }
+            }
+
+            return { type: 'string', value: trimmedValue, raw: trimmedValue };
+        }
+        
+        function formatToSqlValue(parsedData) {
+            switch (parsedData.type) {
+                case 'null':
+                    return 'NULL'; 
+                case 'number':
+                    return parsedData.raw;
+                case 'boolean':
+                    return parsedData.value ? 'TRUE' : 'FALSE';
+                case 'json':
+                case 'string':
+                default:
+                    const escapedValue = String(parsedData.raw).replace(/'/g, "''");
+                    return `'${escapedValue}'`;
+            }
+        }
+
+        function formatToJsonValue(parsedData) {
+            if (parsedData.type === 'null') return null; 
+            return parsedData.value;
+        }
+
+        function updateUIForDbType(dbType) {
+            const labelMap = {
+                'sql': { header: 'SQL Statement', tip: 'Quick Tip (SQL Formatting):', name: 'Table Name:' },
+                'mongodb': { header: 'MongoDB insertMany JSON Array', tip: 'Quick Tip (MongoDB Formatting):', name: 'Collection Name:' },
+                'aql': { header: 'AQL (ArangoDB) Query', tip: 'Quick Tip (AQL Formatting):', name: 'Collection Name:' }
+            };
+
+            const tipMap = {
+                'sql': `
+                    <li>**Strings:** Wrapped in single quotes ('). Single quotes inside strings must be escaped ('').</li>
+                    <li>**Numbers/Booleans/NULL:** Inserted directly (unquoted). Enter TRUE, FALSE, or NULL.</li>
+                    <li>**JSON/Arrays:** Treated as quoted strings.</li>
+                `,
+                'mongodb': `
+                    <li>**Strings:** Wrapped in double quotes (").</li>
+                    <li>**Numbers/Booleans/null:** Inserted directly (unquoted, e.g., 50, true, null).</li>
+                    <li>**JSON/Arrays:** Inserted as native BSON/JSON objects/arrays.</li>
+                `,
+                'aql': `
+                    <li>**AQL is JSON-based:** Data is formatted using JSON syntax.</li>
+                    <li>**Strings:** Wrapped in double quotes (").</li>
+                    <li>**Numbers/Booleans/null:** Inserted directly (e.g., 50, true, null).</li>
+                `
+            };
+
+            const typeConfig = labelMap[dbType];
+            queryTitle.textContent = `${dbType.toUpperCase()} ${queryTypeSelect.value.toUpperCase()} Statement`;
+            outputHeader.textContent = `4. Generated ${dbType.toUpperCase()} Output`;
+            tipHeader.textContent = typeConfig.tip;
+            nameLabel.textContent = typeConfig.name;
+            tipList.innerHTML = tipMap[dbType];
+        }
+
+        function clearTable() {
+            tableBody.innerHTML = '';
+            rowCount = 0;
+            updateStatus();
+        }
+
+        function addRow(initialData = []) {
+            if (fieldNames.length === 0) {
+                showTemporaryMessage('Error: Please define the column/field names (schema) first!', 'red');
+                return;
+            }
+
+            rowCount++;
+            const tr = document.createElement('tr');
+            tr.id = `row-${rowCount}`;
+            tr.className = 'hover:bg-gray-50';
+
+            fieldNames.forEach((fieldName, index) => {
+                const td = document.createElement('td');
+                td.className = 'px-6 py-2 whitespace-nowrap text-sm text-gray-500 data-input-cell';
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'data-input w-full';
+                input.placeholder = fieldName;
+                input.setAttribute('data-field', fieldName);
+                
+                if (initialData[index] !== undefined) {
+                    input.value = initialData[index];
+                }
+
+                td.appendChild(input);
+                tr.appendChild(td);
+            });
+
+            const tdAction = document.createElement('td');
+            tdAction.className = 'px-6 py-2 whitespace-nowrap text-right text-sm font-medium';
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-red-600 hover:text-red-800 transition duration-150';
+            deleteBtn.innerHTML = 'Delete';
+            deleteBtn.onclick = () => deleteRow(tr.id);
+            tdAction.appendChild(deleteBtn);
+            tr.appendChild(tdAction);
+
+            tableBody.appendChild(tr);
+            updateStatus();
+        }
+
+        function deleteRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (row) {
+                tableBody.removeChild(row);
+                updateStatus();
+            }
+        }
+        
+        /**
+         * Parses raw CSV text into headers (first row) and data rows.
+         */
+        function parseCsvData(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            if (lines.length === 0) return { headers: [], data: [] };
+
+            // First line as headers
+            const rawHeaders = lines[0].split(',').map(h => h.trim());
+            const dataRows = [];
+            
+            // Start from the second row for data
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === rawHeaders.length) {
+                    dataRows.push(values);
+                }
+            }
+            
+            return { headers: rawHeaders, data: dataRows };
+        }
+
+        /**
+         * Handles the file object from either browse or drag-and-drop, updates schema, and populates the table.
+         */
+        function handleFile(file) {
+            if (!file) return;
+
+            if (file.type && file.type !== 'text/csv' && file.type !== 'text/plain' && !file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+                showTemporaryMessage('Error: Only CSV (.csv) or text (.txt) files are supported.', 'red');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+                const result = parseCsvData(event.target.result);
+                
+                if (result.headers.length > 0) {
+                    // 1. Update the schema input with the new headers
+                    schemaInput.value = result.headers.join(', ');
+                    
+                    // 2. Call updateSchema to redraw headers and clear data table
+                    updateSchema();
+
+                    // 3. Clear and populate the data table with CSV data
+                    clearTable();
+                    result.data.forEach(rowData => addRow(rowData));
+                    
+                    showTemporaryMessage(`Schema updated and ${result.data.length} rows imported from CSV file.`, 'green');
+                } else {
+                    showTemporaryMessage('Error: File read, but no headers or valid data rows found. Ensure the first row is a header. ', 'red');
+                }
+                
+                document.getElementById('fileInput').value = ''; 
+            };
+
+            reader.onerror = () => {
+                showTemporaryMessage('Error reading file.', 'red');
+            };
+
+            reader.readAsText(file);
+        }
+        
+        /**
+         * Updates the table headers and body based on the new schema input.
+         */
+        function updateSchema() {
+            const input = schemaInput.value.trim();
+            const dbType = dbTypeSelect.value;
+            const queryType = queryTypeSelect.value;
+            let rawFieldNames = [];
+
+            if (input) {
+                rawFieldNames = input.split(',').map(name => name.trim()).filter(name => name.length > 0);
+            }
+            
+            fieldNames = [...new Set(rawFieldNames)];
+            
+            if (rawFieldNames.length !== fieldNames.length) {
+                 const duplicateNames = rawFieldNames.filter((name, index) => rawFieldNames.indexOf(name) !== index);
+                 showTemporaryMessage(`Warning: Duplicate column names found and removed: ${duplicateNames.join(', ')}.`, 'yellow');
+            }
+
+            // Show/Hide PK field for UPDATE queries
+            if (queryType === 'update') {
+                pkFieldContainer.classList.remove('hidden');
+            } else {
+                pkFieldContainer.classList.add('hidden');
+            }
+
+            updateUIForDbType(dbType);
+
+            // Re-render Header
+            tableHeader.innerHTML = '';
+            if (fieldNames.length > 0) {
+                fieldNames.forEach(fieldName => {
+                    const th = document.createElement('th');
+                    th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                    th.textContent = fieldName;
+                    tableHeader.appendChild(th);
+                });
+                const thAction = document.createElement('th');
+                thAction.className = 'px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider';
+                thAction.textContent = 'Action';
+                    
+                tableHeader.appendChild(thAction);
+
+                const existingRows = tableBody.querySelectorAll('tr');
+                if (existingRows.length === 0) {
+                    addRow();
+                } else {
+                    // Preserve existing data only if the schema hasn't changed drastically
+                    const existingData = [];
+                    existingRows.forEach(row => {
+                        const rowData = Array.from(row.querySelectorAll('.data-input')).map(input => input.value);
+                        existingData.push(rowData.slice(0, fieldNames.length));
+                    });
+                    
+                    clearTable();
+                    existingData.forEach(rowData => addRow(rowData));
+                }
+            } else {
+                clearTable();
+            }
+
+            updateStatus();
+        }
+
+        function updateStatus() {
+            const currentRows = tableBody.querySelectorAll('tr').length;
+            tableStatus.textContent = `${fieldNames.length} fields defined, ${currentRows} data rows entered.`;
+        }
+
+        function generateQuery() {
+            const tableName = tableNameInput.value.trim();
+            const dbType = dbTypeSelect.value;
+            const queryType = queryTypeSelect.value;
+            const pkFieldName = pkFieldNameInput.value.trim();
+            const dataRows = tableBody.querySelectorAll('tr');
+            const dataObjects = [];
+            let generatedQuery = '';
+
+            // Validation
+            if (fieldNames.length === 0 || dataRows.length === 0 || !tableName) {
+                const msg = !tableName ? 'Error: Please enter a table/collection name.' : 
+                            fieldNames.length === 0 ? 'Error: Please define the column/field names.' :
+                            'Error: Please add at least one data row.';
+                showTemporaryMessage(msg, 'red');
+                return;
+            }
+
+            if (queryType === 'update' && !pkFieldName) {
+                 showTemporaryMessage('Error: Primary Key (PK) Column Name is required for UPDATE queries.', 'red');
+                 return;
+            }
+
+            // 1. Extract Data into Generic Objects
+            dataRows.forEach(row => {
+                const inputs = row.querySelectorAll('.data-input');
+                const rowObject = {};
+                
+                inputs.forEach((input, index) => {
+                    const fieldName = fieldNames[index];
+                    const value = input.value;
+                    const parsed = parseValue(value);
+                    
+                    rowObject[fieldName] = parsed;
+                });
+                dataObjects.push(rowObject);
+            });
+
+            // 2. Generate Query based on DB Type and Query Type
+            if (dbType === 'sql') {
+                if (queryType === 'insert') {
+                    const sqlValueRows = [];
+                    dataObjects.forEach(obj => {
+                        const values = fieldNames.map(fieldName => formatToSqlValue(obj[fieldName]));
+                        sqlValueRows.push(`(${values.join(', ')})`);
+                    });
+
+                    const columns = fieldNames.map(name => `"${name}"`).join(', ');
+                    const valuesBlock = sqlValueRows.join(',\n');
+                    
+                    generatedQuery = 
+`INSERT INTO "${tableName}" (${columns})
+VALUES
+${valuesBlock};`;
+
+                } else if (queryType === 'update') {
+                    const updateStatements = dataObjects.map(obj => {
+                        if (!obj[pkFieldName] || obj[pkFieldName].type === 'string' && obj[pkFieldName].raw.trim() === '') return ''; 
+                        
+                        const pkValue = formatToSqlValue(obj[pkFieldName]);
+                        const setClauses = fieldNames
+                            .filter(name => name !== pkFieldName)
+                            .map(name => `"${name}" = ${formatToSqlValue(obj[name])}`)
+                            .join(',\n    ');
+
+                        return `UPDATE "${tableName}" SET
+    ${setClauses}
+WHERE "${pkFieldName}" = ${pkValue};`;
+                    }).filter(s => s).join('\n\n');
+
+                    generatedQuery = updateStatements;
+                }
+            } else if (dbType === 'mongodb') {
+                const jsonDocuments = dataObjects.map(obj => {
+                    const doc = {};
+                    fieldNames.forEach(fieldName => {
+                        doc[fieldName] = formatToJsonValue(obj[fieldName]);
+                    });
+                    return doc;
+                });
+                
+                const jsonString = JSON.stringify(jsonDocuments, null, 2);
+
+                if (queryType === 'insert') {
+                    generatedQuery = 
+`// Use this JSON array with MongoDB's insertMany method
+// Example: db.${tableName}.insertMany(data);
+const data = ${jsonString};`;
+                } else if (queryType === 'update') {
+                    const bulkUpdateStatements = dataObjects.map(obj => {
+                        if (!obj[pkFieldName] || obj[pkFieldName].type === 'string' && obj[pkFieldName].raw.trim() === '') return '';
+
+                        const pkValue = formatToJsonValue(obj[pkFieldName]);
+                        const filter = { [pkFieldName]: pkValue };
+                        const updateFields = {};
+                        
+                        fieldNames.forEach(fieldName => {
+                            if (fieldName !== pkFieldName) {
+                                updateFields[fieldName] = formatToJsonValue(obj[fieldName]);
+                            }
+                        });
+
+                        const filterString = JSON.stringify(filter);
+                        const updateString = JSON.stringify(updateFields).replace('{', '{$set: {').replace(/}$/, '}}');
+
+                        return `db.${tableName}.updateOne(${filterString}, ${updateString});`;
+                    }).filter(s => s).join('\n');
+
+                    generatedQuery = 
+`// MongoDB Bulk Update Statements (Run these individually or use bulkWrite)
+${bulkUpdateStatements}`;
+                }
+            } else if (dbType === 'aql') {
+                const aqlDocuments = dataObjects.map(obj => {
+                    const doc = {};
+                    fieldNames.forEach(fieldName => {
+                        doc[fieldName] = formatToJsonValue(obj[fieldName]);
+                    });
+                    return doc;
+                });
+
+                const aqlDataString = JSON.stringify(aqlDocuments, null, 2);
+
+                if (queryType === 'insert') {
+                    generatedQuery = 
+`// AQL Query (ArangoDB) for bulk insertion
+LET docs = ${aqlDataString}
+
+FOR doc IN docs
+    INSERT doc INTO \`${tableName}\`
+    OPTIONS { overwriteMode: "ignore" } 
+    RETURN NEW`;
+                } else if (queryType === 'update') {
+                    generatedQuery = 
+`// AQL Query (ArangoDB) for bulk update
+LET docs = ${aqlDataString}
+
+FOR newDoc IN docs
+    FILTER newDoc.${pkFieldName} != null // Ensure primary key exists
+    UPDATE newDoc.${pkFieldName} WITH newDoc IN \`${tableName}\`
+    OPTIONS { keepNull: false }
+    RETURN NEW`;
+                }
+            }
+
+            // 3. Display Output
+            queryOutput.textContent = generatedQuery;
+            
+            noOutputMessage.classList.add('hidden');
+            outputContainer.classList.remove('hidden');
+        }
+
+        function copyToClipboard(elementId) {
+            const textToCopy = document.getElementById(elementId).textContent;
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                const btn = document.querySelector(`#${elementId}`).closest('.bg-white').querySelector('button[onclick^="copyToClipboard"]');
+                if (btn) {
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    btn.classList.add('bg-lime-500');
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.classList.add('bg-green-500', 'hover:bg-green-600');
+                        btn.classList.remove('bg-lime-500');
+                    }, 1500);
+                }
+            } catch (err) {
+                console.error('Could not copy text: ', err);
+                showTemporaryMessage('Failed to copy. Please copy the text manually.', 'red');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        window.onload = function() {
+            // Setup File/Drag-and-Drop Handlers
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            // Highlight drag area when file is over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+            });
+
+            // Handle dropped files
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const file = dt.files[0];
+                handleFile(file);
+            }, false);
+
+            // Handle file selection via browse button
+            fileInput.addEventListener('change', (e) => {
+                handleFile(e.target.files[0]);
+            });
+
+            // Default schema setup
+            schemaInput.value = 'id, name, price, tags';
+            tableNameInput.value = 'products';
+            dbTypeSelect.value = 'sql';
+            queryTypeSelect.value = 'insert';
+            pkFieldNameInput.value = 'id';
+            updateSchema();
+            
+            // Populate sample data
+            const sampleData = [
+                ['P001', 'Laptop Pro X', '1999.99', '["electronics", "premium"]'],
+                ['P002', 'Wireless Mouse', '45.00', '["accessories", "peripheral"]']
+            ];
+
+            clearTable();
+            sampleData.forEach(rowData => addRow(rowData));
+            
+            updateStatus();
+        };
+
+    </script>
+
+</body>
+</html>
